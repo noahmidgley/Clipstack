@@ -44,6 +44,7 @@ final class HistoryStore {
             existing.date = item.date
             existing.sourceAppName = item.sourceAppName
             existing.sourceBundleID = item.sourceBundleID
+            existing.origin = item.origin
             items.insert(existing, at: 0)
             // Delete any files the new copy saved that the existing item doesn't use.
             deleteFiles(item.fileNames.subtracting(existing.fileNames))

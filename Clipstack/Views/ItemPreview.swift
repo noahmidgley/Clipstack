@@ -71,16 +71,19 @@ struct ItemPreview: View {
     private var details: some View {
         Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 12, verticalSpacing: 4) {
             detailRow("Type") { Text(item.kindName) }
-            if let app = item.sourceAppName {
+            if let source = item.sourceName {
                 detailRow("Source") {
                     Label {
-                        Text(app)
+                        Text(source)
                     } icon: {
-                        if let icon = sourceAppIcon {
+                        if item.isFromOtherDevice {
+                            Image(systemName: ClipItem.otherDeviceSymbol)
+                        } else if let icon = sourceAppIcon {
                             Image(nsImage: icon).resizable().frame(width: 16, height: 16)
                         }
                     }
                 }
+                .help(item.isFromOtherDevice ? "Copied on another device and shared through Universal Clipboard" : "")
             }
             detailRow("Copied") {
                 Text(item.date.formatted(date: .abbreviated, time: .shortened))

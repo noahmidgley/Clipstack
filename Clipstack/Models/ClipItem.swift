@@ -11,6 +11,13 @@ struct ClipItem: Identifiable, Codable, Hashable {
         case text, link, image, color
     }
 
+    enum Origin: String, Codable {
+        /// Copied in an app on this Mac.
+        case thisMac
+        /// Arrived through Universal Clipboard from an iPhone, iPad or another Mac.
+        case otherDevice
+    }
+
     var id = UUID()
     var kind: Kind
     /// The text, URL string or hex code. For images, a short description like "Image 1024 × 768".
@@ -23,6 +30,8 @@ struct ClipItem: Identifiable, Codable, Hashable {
     var contentKey: String
     var sourceAppName: String?
     var sourceBundleID: String?
+    /// Optional so history saved before this existed still loads. Nil means this Mac.
+    var origin: Origin?
     var date = Date.now
     var isPinned = false
 
@@ -33,6 +42,25 @@ struct ClipItem: Identifiable, Codable, Hashable {
     /// Every file this item owns on disk.
     var fileNames: Set<String> {
         Set([imageFileName, thumbnailFileName, richTextFileName].compactMap(\.self))
+    }
+
+    var isFromOtherDevice: Bool { origin == .otherDevice }
+
+    /// The app it was copied in, or "Other Device" for Universal Clipboard.
+    /// macOS doesn't say which device sent it, so there's no device name to show.
+    var sourceName: String? {
+        isFromOtherDevice ? "Other Device" : sourceAppName
+    }
+
+    static let otherDeviceSymbol = "macbook.and.iphone"
+
+    /// What a search can match on besides the content. "iPhone" matches too, since that's how
+    /// most people think of it, even though the copy might have come from an iPad or a Mac.
+    var sourceSearchTerms: [String] {
+        if isFromOtherDevice {
+            return ["Other Device", "Universal Clipboard", "iPhone", "iPad"]
+        }
+        return [sourceAppName].compactMap(\.self)
     }
 
     /// A readable name for the kind, used by VoiceOver and the preview.

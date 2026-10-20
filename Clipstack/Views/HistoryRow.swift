@@ -32,7 +32,7 @@ struct HistoryRow: View {
                 Text(item.rowText)
                     .lineLimit(2)
                     .truncationMode(.tail)
-                Text(subtitle)
+                subtitle
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -92,15 +92,19 @@ struct HistoryRow: View {
         .help(item.isPinned ? "Unpin" : "Pin")
     }
 
-    private var subtitle: String {
+    /// "Safari · 2 min ago", or the device symbol and "Other Device" for Universal Clipboard.
+    private var subtitle: Text {
         let time = Self.timeFormatter.localizedString(for: item.date, relativeTo: now)
-        guard let app = item.sourceAppName else { return time }
-        return "\(app) · \(time)"
+        guard let source = item.sourceName else { return Text(time) }
+        if item.isFromOtherDevice {
+            return Text("\(Image(systemName: ClipItem.otherDeviceSymbol)) \(source) · \(time)")
+        }
+        return Text("\(source) · \(time)")
     }
 
     private var accessibilityText: String {
         var parts = [item.kindName, item.kind == .image ? item.text : item.rowText]
-        if let app = item.sourceAppName { parts.append("from \(app)") }
+        if let source = item.sourceName { parts.append("from \(source)") }
         parts.append(Self.timeFormatter.localizedString(for: item.date, relativeTo: now))
         if item.isPinned { parts.append("Pinned") }
         if let shortcutNumber { parts.append("Command \(shortcutNumber)") }

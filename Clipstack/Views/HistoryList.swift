@@ -37,7 +37,7 @@ struct HistoryListState {
             guard filter.includes(item) else { return false }
             guard !searchText.isEmpty else { return true }
             return item.displayText.localizedStandardContains(searchText)
-                || (item.sourceAppName?.localizedStandardContains(searchText) ?? false)
+                || item.sourceSearchTerms.contains { $0.localizedStandardContains(searchText) }
         }
         return (matching.filter(\.isPinned), matching.filter { !$0.isPinned })
     }
