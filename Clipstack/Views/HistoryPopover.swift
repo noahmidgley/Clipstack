@@ -9,6 +9,7 @@ import SwiftUI
 /// The window that opens from the menu bar icon.
 struct HistoryPopover: View {
     @Environment(HistoryStore.self) private var store
+    @Environment(\.openSettings) private var openSettings
     let monitor: ClipboardMonitor
     let quickPaste: QuickPasteController
 
@@ -85,7 +86,8 @@ struct HistoryPopover: View {
                     close()
                     quickPaste.show()
                 }
-                .keyboardShortcut("v", modifiers: [.shift, .command])
+                Button("Settings…", action: showSettings)
+                    .keyboardShortcut(",")
                 Divider()
                 Button("Quit Clipstack") { NSApp.terminate(nil) }
                     .keyboardShortcut("q")
@@ -104,9 +106,13 @@ struct HistoryPopover: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background {
-            // ⌘Q also works while the menu is closed.
-            Button("Quit") { NSApp.terminate(nil) }
-                .keyboardShortcut("q")
+            // ⌘, and ⌘Q also work while the menu is closed.
+            Group {
+                Button("Settings", action: showSettings)
+                    .keyboardShortcut(",")
+                Button("Quit") { NSApp.terminate(nil) }
+                    .keyboardShortcut("q")
+            }
                 .opacity(0)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -118,6 +124,13 @@ struct HistoryPopover: View {
     private func choose(_ item: ClipItem) {
         monitor.copy(item)
         close()
+    }
+
+    /// Clipstack has no Dock icon, so it activates first to bring the Settings window to the front.
+    private func showSettings() {
+        close()
+        NSApp.activate()
+        openSettings()
     }
 
     private func close() {

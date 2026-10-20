@@ -26,6 +26,16 @@ struct HotKeyShortcut: Codable, Equatable {
         return result + keyName
     }
 
+    /// For VoiceOver: "Shift Command V".
+    var spokenString: String {
+        var parts: [String] = []
+        if modifiers.contains(.control) { parts.append("Control") }
+        if modifiers.contains(.option) { parts.append("Option") }
+        if modifiers.contains(.shift) { parts.append("Shift") }
+        if modifiers.contains(.command) { parts.append("Command") }
+        return (parts + [keyName]).joined(separator: " ")
+    }
+
     var carbonModifiers: UInt32 {
         var result = 0
         if modifiers.contains(.command) { result |= cmdKey }

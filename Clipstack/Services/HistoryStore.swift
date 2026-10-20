@@ -18,21 +18,28 @@ final class HistoryStore {
 
     var canUndoClear: Bool { clearedItems != nil }
 
-    /// Unpinned items to keep. Becomes a setting later.
-    var maxItems: Int {
-        UserDefaults.standard.object(forKey: "maxItems") as? Int ?? 200
-    }
+    @ObservationIgnored private let settings: AppSettings
+    @ObservationIgnored private var expiryTask: Task<Void, Never>?
 
     @ObservationIgnored let directory: URL
     @ObservationIgnored let filesDirectory: URL
     @ObservationIgnored private var historyFile: URL { directory.appending(path: "history.json") }
 
-    init() {
+    init(settings: AppSettings) {
+        self.settings = settings
         let support = URL.applicationSupportDirectory.appending(path: "Clipstack", directoryHint: .isDirectory)
         directory = support
         filesDirectory = support.appending(path: "Files", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: filesDirectory, withIntermediateDirectories: true)
         load()
+        enforceLimits()
+        // Check once an hour so old items expire even when nothing new is copied.
+        expiryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3600), tolerance: .seconds(300))
+                self?.enforceLimits()
+            }
+        }
     }
 
     // MARK: - Changing the history
@@ -51,7 +58,7 @@ final class HistoryStore {
         } else {
             items.insert(item, at: 0)
         }
-        trimToLimit()
+        applyLimits()
         save()
     }
 
@@ -67,7 +74,7 @@ final class HistoryStore {
     func togglePin(_ item: ClipItem) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index].isPinned.toggle()
-        trimToLimit()
+        applyLimits()
         save()
     }
 
@@ -100,19 +107,34 @@ final class HistoryStore {
         clearedItems = nil
     }
 
-    private func trimToLimit() {
+    /// Removes items outside the current limits and saves.
+    func enforceLimits() {
+        if applyLimits() { save() }
+    }
+
+    /// Unpinned items that the given limits would remove: the oldest beyond `maxItems`,
+    /// and any older than `maxAgeDays` (0 means no age limit). Pinned items are never removed.
+    func itemsOutsideLimits(maxItems: Int, maxAgeDays: Int, now: Date = .now) -> [ClipItem] {
+        let cutoff = maxAgeDays > 0 ? Calendar.current.date(byAdding: .day, value: -maxAgeDays, to: now) : nil
         var unpinnedSeen = 0
-        var removed: [ClipItem] = []
-        items.removeAll { item in
+        return items.filter { item in
             guard !item.isPinned else { return false }
             unpinnedSeen += 1
-            if unpinnedSeen > maxItems {
-                removed.append(item)
-                return true
-            }
+            if unpinnedSeen > maxItems { return true }
+            if let cutoff, item.date < cutoff { return true }
             return false
         }
+    }
+
+    /// Returns true if anything was removed.
+    @discardableResult
+    private func applyLimits() -> Bool {
+        let removed = itemsOutsideLimits(maxItems: settings.maxItems, maxAgeDays: settings.maxAgeDays)
+        guard !removed.isEmpty else { return false }
+        let ids = Set(removed.map(\.id))
+        items.removeAll { ids.contains($0.id) }
         removed.forEach(deleteFiles)
+        return true
     }
 
     // MARK: - Images

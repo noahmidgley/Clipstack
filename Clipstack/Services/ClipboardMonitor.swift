@@ -22,11 +22,13 @@ final class ClipboardMonitor {
 
     private let pasteboard = NSPasteboard.general
     private let store: HistoryStore
+    private let settings: AppSettings
     private var lastChangeCount: Int
     private var pollTask: Task<Void, Never>?
 
-    init(store: HistoryStore) {
+    init(store: HistoryStore, settings: AppSettings) {
         self.store = store
+        self.settings = settings
         lastChangeCount = pasteboard.changeCount
     }
 
@@ -65,11 +67,12 @@ final class ClipboardMonitor {
     private func readItem() -> ClipItem? {
         guard let types = pasteboard.types, !types.isEmpty else { return nil }
         let typeIDs = Set(types.map(\.rawValue))
-        guard typeIDs.isDisjoint(with: Self.privateTypes) else { return nil }
+        if settings.skipPrivateItems, !typeIDs.isDisjoint(with: Self.privateTypes) { return nil }
 
         // The frontmost app didn't make a copy that came from another device.
         let isRemote = typeIDs.contains(Self.universalClipboardType)
         let app = isRemote ? nil : NSWorkspace.shared.frontmostApplication
+        if settings.isIgnored(bundleID: app?.bundleIdentifier) { return nil }
         func item(_ kind: ClipItem.Kind, _ text: String, key: String? = nil, image: String? = nil) -> ClipItem {
             ClipItem(kind: kind, text: text, imageFileName: image, contentKey: key ?? text,
                      sourceAppName: app?.localizedName, sourceBundleID: app?.bundleIdentifier,

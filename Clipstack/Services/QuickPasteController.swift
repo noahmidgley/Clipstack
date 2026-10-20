@@ -15,33 +15,48 @@ final class QuickPasteController: NSObject, NSWindowDelegate {
     @ObservationIgnored private let store: HistoryStore
     @ObservationIgnored private let monitor: ClipboardMonitor
     @ObservationIgnored let permission: AccessibilityPermission
+    @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private var panel: QuickPastePanel?
     @ObservationIgnored private lazy var hotKey = GlobalHotKey { [weak self] in self?.toggle() }
 
     /// The app that was in front when the panel opened. Pasting sends ⌘V to it.
     private(set) var targetApp: NSRunningApplication?
 
-    init(store: HistoryStore, monitor: ClipboardMonitor, permission: AccessibilityPermission) {
+    init(store: HistoryStore, monitor: ClipboardMonitor, permission: AccessibilityPermission, settings: AppSettings) {
         self.store = store
         self.monitor = monitor
         self.permission = permission
+        self.settings = settings
         super.init()
-        let shortcut = Self.savedShortcut
-        if hotKey.register(shortcut) {
-            Self.log.info("Registered quick paste shortcut \(shortcut.displayString, privacy: .public)")
-        } else {
-            Self.log.error("Couldn’t register \(shortcut.displayString, privacy: .public). Another app may be using it.")
-        }
+        resumeShortcut()
     }
 
     private static let log = Logger(subsystem: "com.noahmidgley.Clipstack", category: "QuickPaste")
 
-    static var savedShortcut: HotKeyShortcut {
-        guard let data = UserDefaults.standard.data(forKey: "quickPasteShortcut"),
-              let shortcut = try? JSONDecoder().decode(HotKeyShortcut.self, from: data) else {
-            return .quickPasteDefault
+    // MARK: - Shortcut
+
+    var shortcut: HotKeyShortcut { settings.quickPasteShortcut }
+
+    /// Switches to a new shortcut. Returns false, keeping the old one, if another app already uses it.
+    func changeShortcut(to newShortcut: HotKeyShortcut) -> Bool {
+        guard hotKey.register(newShortcut) else {
+            Self.log.error("Couldn’t register \(newShortcut.displayString, privacy: .public). Another app may be using it.")
+            resumeShortcut()
+            return false
         }
-        return shortcut
+        settings.quickPasteShortcut = newShortcut
+        return true
+    }
+
+    /// Stops listening while Settings records a new shortcut, so pressing the current one is captured.
+    func suspendShortcut() {
+        hotKey.unregister()
+    }
+
+    func resumeShortcut() {
+        if !hotKey.register(shortcut) {
+            Self.log.error("Couldn’t register \(self.shortcut.displayString, privacy: .public). Another app may be using it.")
+        }
     }
 
     // MARK: - Showing and hiding
