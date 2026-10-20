@@ -13,6 +13,8 @@ struct SearchField: NSViewRepresentable {
     var onMoveUp: () -> Void = {}
     var onMoveDown: () -> Void = {}
     var onSubmit: () -> Void = {}
+    /// Option-Return.
+    var onAlternateSubmit: () -> Void = {}
     /// Esc with an empty field.
     var onEscape: () -> Void = {}
     /// Called each time the field's window becomes key, such as when the popover opens.
@@ -57,6 +59,8 @@ struct SearchField: NSViewRepresentable {
                 parent.onMoveDown()
             case #selector(NSResponder.insertNewline(_:)):
                 parent.onSubmit()
+            case #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
+                parent.onAlternateSubmit()
             case #selector(NSResponder.cancelOperation(_:)):
                 // First Esc clears the search, the next one closes.
                 if parent.text.isEmpty {

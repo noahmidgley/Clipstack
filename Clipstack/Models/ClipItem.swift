@@ -17,6 +17,8 @@ struct ClipItem: Identifiable, Codable, Hashable {
     var text: String
     /// File name of the full-size PNG and its thumbnail, for images only.
     var imageFileName: String?
+    /// File name of saved RTF or HTML formatting, for text copied with styles.
+    var richTextFileName: String?
     /// Used to spot duplicates: the text itself, or a hash of the image data.
     var contentKey: String
     var sourceAppName: String?
@@ -26,6 +28,11 @@ struct ClipItem: Identifiable, Codable, Hashable {
 
     var thumbnailFileName: String? {
         imageFileName.map { "thumb-" + $0 }
+    }
+
+    /// Every file this item owns on disk.
+    var fileNames: Set<String> {
+        Set([imageFileName, thumbnailFileName, richTextFileName].compactMap(\.self))
     }
 
     /// A readable name for the kind, used by VoiceOver and the preview.

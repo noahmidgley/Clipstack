@@ -86,14 +86,22 @@ final class ClipboardMonitor {
             guard !trimmed.isEmpty else { return nil }
             if ClipItem.isHexColor(trimmed) { return item(.color, trimmed.uppercased()) }
             if ClipItem.isLink(trimmed) { return item(.link, trimmed) }
-            return item(.text, string)
+            var text = item(.text, string)
+            // Keep any formatting so "Paste" can restore it.
+            if let existing = store.item(withContentKey: string) {
+                text.richTextFileName = existing.richTextFileName
+            } else if let type = [NSPasteboard.PasteboardType.rtf, .html].first(where: types.contains),
+                      let data = pasteboard.data(forType: type) {
+                text.richTextFileName = store.saveRichText(data, type: type)
+            }
+            return text
         }
 
         // Images, such as screenshots or "Copy Image" in a browser.
         if let data = pasteboard.data(forType: .png) ?? pasteboard.data(forType: .tiff) {
             let key = "image:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
             // Already in the history: just move it up, without saving the file again.
-            if let existing = store.items.first(where: { $0.contentKey == key }) {
+            if let existing = store.item(withContentKey: key) {
                 return item(.image, existing.text, key: key, image: existing.imageFileName)
             }
             guard let saved = store.saveImage(data) else { return nil }
@@ -111,17 +119,22 @@ final class ClipboardMonitor {
     // MARK: - Writing
 
     /// Puts an item back on the clipboard and moves it to the top of the history.
-    func copy(_ item: ClipItem) {
+    /// With `asPlainText`, formatting and link data are left out.
+    func copy(_ item: ClipItem, asPlainText: Bool = false) {
         pasteboard.clearContents()
         switch item.kind {
         case .text, .color:
             pasteboard.setString(item.text, forType: .string)
+            if !asPlainText, let rich = store.richText(for: item) {
+                pasteboard.setData(rich.data, forType: rich.type)
+            }
         case .link:
-            if let url = URL(string: item.text) {
+            let url = URL(string: item.text)
+            if !asPlainText, let url {
                 pasteboard.writeObjects([url as NSURL])
             }
-            if URL(string: item.text)?.isFileURL != true {
-                pasteboard.setString(item.text, forType: .string)
+            if asPlainText || url?.isFileURL != true {
+                pasteboard.setString(asPlainText ? item.displayText : item.text, forType: .string)
             }
         case .image:
             if let url = store.imageURL(for: item), let image = NSImage(contentsOf: url) {

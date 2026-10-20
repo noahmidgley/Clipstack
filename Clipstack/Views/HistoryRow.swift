@@ -12,7 +12,13 @@ struct HistoryRow: View {
     let shortcutNumber: Int?
     let isSelected: Bool
     let now: Date
+    /// The context menu title for choosing, "Copy" or "Paste".
+    var chooseTitle = "Copy"
+    /// Read by VoiceOver, such as "Copies to the clipboard".
+    var chooseHint = "Copies to the clipboard"
     var onChoose: () -> Void
+    /// When set, a click selects the row and a double-click chooses it.
+    var onSelect: (() -> Void)?
     var onTogglePin: () -> Void
     var onDelete: () -> Void
 
@@ -54,10 +60,11 @@ struct HistoryRow: View {
             }
         }
         .contentShape(.rect)
-        .onTapGesture(perform: onChoose)
+        .onTapGesture { (onSelect ?? onChoose)() }
+        .simultaneousGesture(TapGesture(count: 2).onEnded(onChoose), including: onSelect == nil ? .none : .all)
         .onHover { isHovering = $0 }
         .contextMenu {
-            Button("Copy", action: onChoose)
+            Button(chooseTitle, action: onChoose)
             Button(item.isPinned ? "Unpin" : "Pin", action: onTogglePin)
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
@@ -65,7 +72,7 @@ struct HistoryRow: View {
         // VoiceOver reads the row as one element, with pin and delete as actions.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Copies to the clipboard")
+        .accessibilityHint(chooseHint)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(.default, onChoose)
         .accessibilityAction(named: item.isPinned ? "Unpin" : "Pin", onTogglePin)

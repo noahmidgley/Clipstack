@@ -24,14 +24,14 @@ final class HistoryStore {
     }
 
     @ObservationIgnored let directory: URL
-    @ObservationIgnored let imagesDirectory: URL
+    @ObservationIgnored let filesDirectory: URL
     @ObservationIgnored private var historyFile: URL { directory.appending(path: "history.json") }
 
     init() {
         let support = URL.applicationSupportDirectory.appending(path: "Clipstack", directoryHint: .isDirectory)
         directory = support
-        imagesDirectory = support.appending(path: "Images", directoryHint: .isDirectory)
-        try? FileManager.default.createDirectory(at: imagesDirectory, withIntermediateDirectories: true)
+        filesDirectory = support.appending(path: "Files", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: filesDirectory, withIntermediateDirectories: true)
         load()
     }
 
@@ -45,8 +45,8 @@ final class HistoryStore {
             existing.sourceAppName = item.sourceAppName
             existing.sourceBundleID = item.sourceBundleID
             items.insert(existing, at: 0)
-            // The new copy wrote its own image file; the old one already has it.
-            if item.imageFileName != existing.imageFileName { deleteFiles(for: item) }
+            // Delete any files the new copy saved that the existing item doesn't use.
+            deleteFiles(item.fileNames.subtracting(existing.fileNames))
         } else {
             items.insert(item, at: 0)
         }
@@ -117,11 +117,11 @@ final class HistoryStore {
     // MARK: - Images
 
     func imageURL(for item: ClipItem) -> URL? {
-        item.imageFileName.map { imagesDirectory.appending(path: $0) }
+        item.imageFileName.map { filesDirectory.appending(path: $0) }
     }
 
     func thumbnailURL(for item: ClipItem) -> URL? {
-        item.thumbnailFileName.map { imagesDirectory.appending(path: $0) }
+        item.thumbnailFileName.map { filesDirectory.appending(path: $0) }
     }
 
     /// Saves image data as a PNG plus a small thumbnail. Returns the file name and pixel size.
@@ -130,7 +130,7 @@ final class HistoryStore {
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
 
         let fileName = UUID().uuidString + ".png"
-        let url = imagesDirectory.appending(path: fileName)
+        let url = filesDirectory.appending(path: fileName)
         guard writePNG(image, to: url) else { return nil }
 
         let thumbnailOptions: [CFString: Any] = [
@@ -139,7 +139,7 @@ final class HistoryStore {
             kCGImageSourceThumbnailMaxPixelSize: 128,
         ]
         if let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) {
-            _ = writePNG(thumbnail, to: imagesDirectory.appending(path: "thumb-" + fileName))
+            _ = writePNG(thumbnail, to: filesDirectory.appending(path: "thumb-" + fileName))
         }
         return (fileName, image.width, image.height)
     }
@@ -152,10 +152,38 @@ final class HistoryStore {
         return CGImageDestinationFinalize(destination)
     }
 
-    private func deleteFiles(for item: ClipItem) {
-        for url in [imageURL(for: item), thumbnailURL(for: item)].compactMap(\.self) {
-            try? FileManager.default.removeItem(at: url)
+    // MARK: - Formatted text
+
+    /// Saves RTF or HTML data and returns its file name, such as "….rtf".
+    func saveRichText(_ data: Data, type: NSPasteboard.PasteboardType) -> String? {
+        let fileName = UUID().uuidString + (type == .rtf ? ".rtf" : ".html")
+        do {
+            try data.write(to: filesDirectory.appending(path: fileName), options: .atomic)
+            return fileName
+        } catch {
+            return nil
         }
+    }
+
+    /// The saved formatting for an item and the pasteboard type to write it as.
+    func richText(for item: ClipItem) -> (data: Data, type: NSPasteboard.PasteboardType)? {
+        guard let fileName = item.richTextFileName,
+              let data = try? Data(contentsOf: filesDirectory.appending(path: fileName)) else { return nil }
+        return (data, fileName.hasSuffix(".rtf") ? .rtf : .html)
+    }
+
+    private func deleteFiles(for item: ClipItem) {
+        deleteFiles(item.fileNames)
+    }
+
+    private func deleteFiles(_ fileNames: Set<String>) {
+        for fileName in fileNames {
+            try? FileManager.default.removeItem(at: filesDirectory.appending(path: fileName))
+        }
+    }
+
+    func item(withContentKey key: String) -> ClipItem? {
+        items.first { $0.contentKey == key }
     }
 
     // MARK: - Saving and loading
@@ -177,12 +205,12 @@ final class HistoryStore {
         removeOrphanedImages()
     }
 
-    /// Deletes image files that no item refers to, such as ones left behind by a clear that was never undone.
+    /// Deletes files that no item refers to, such as ones left behind by a clear that was never undone.
     private func removeOrphanedImages() {
-        let inUse = Set(items.flatMap { [$0.imageFileName, $0.thumbnailFileName].compactMap(\.self) })
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: imagesDirectory.path())) ?? []
+        let inUse = items.reduce(into: Set<String>()) { $0.formUnion($1.fileNames) }
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: filesDirectory.path())) ?? []
         for file in files where !inUse.contains(file) {
-            try? FileManager.default.removeItem(at: imagesDirectory.appending(path: file))
+            try? FileManager.default.removeItem(at: filesDirectory.appending(path: file))
         }
     }
 }
