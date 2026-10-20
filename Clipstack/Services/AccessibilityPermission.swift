@@ -6,6 +6,7 @@
 import AppKit
 import ApplicationServices
 import Observation
+import OSLog
 
 /// Tracks whether Clipstack may send ⌘V to other apps, which macOS treats as an Accessibility feature.
 @Observable
@@ -18,6 +19,8 @@ final class AccessibilityPermission {
     @ObservationIgnored private var watchTask: Task<Void, Never>?
 
     init() {
+        Logger(subsystem: "com.noahmidgley.Clipstack", category: "Permissions")
+            .info("Accessibility access at launch: \(self.isTrusted ? "granted" : "not granted", privacy: .public)")
         // macOS posts this whenever the Accessibility list in System Settings changes.
         watchTask = Task { [weak self] in
             let changes = DistributedNotificationCenter.default().notifications(named: .init("com.apple.accessibility.api"))

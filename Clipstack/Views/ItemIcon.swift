@@ -9,6 +9,8 @@ import SwiftUI
 /// The leading icon for an item: a symbol, a colour swatch or an image thumbnail.
 struct ItemIcon: View {
     @Environment(HistoryStore.self) private var store
+    /// Increased on a selected row, where the symbol needs full strength to stay visible on blue.
+    @Environment(\.backgroundProminence) private var prominence
     let item: ClipItem
     var size: CGFloat = 28
 
@@ -48,7 +50,7 @@ struct ItemIcon: View {
             .overlay {
                 Image(systemName: item.symbolName)
                     .font(.system(size: size * 0.45, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(prominence == .increased ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
             }
     }
 

@@ -115,3 +115,23 @@ extension ClipItem {
             && (url.host() != nil || scheme == "mailto" || scheme == "file")
     }
 }
+
+extension ClipItem {
+    /// "2 min. ago", or "now" rather than "in 0 sec.".
+    static let timeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        formatter.dateTimeStyle = .named
+        return formatter
+    }()
+
+    /// What VoiceOver reads: "Link, apple.com, from Safari, 2 min. ago, Pinned, Command 1".
+    func accessibilityDescription(now: Date = .now, shortcutNumber: Int? = nil) -> String {
+        var parts = [kindName, kind == .image ? text : rowText]
+        if let sourceName { parts.append("from \(sourceName)") }
+        parts.append(Self.timeFormatter.localizedString(for: date, relativeTo: now))
+        if isPinned { parts.append("Pinned") }
+        if let shortcutNumber { parts.append("Command \(shortcutNumber)") }
+        return parts.joined(separator: ", ")
+    }
+}

@@ -58,11 +58,16 @@ struct HistoryListState {
         return visible.indices.contains(index) ? visible[index] : nil
     }
 
+    /// Moves the highlight with ↑ and ↓. Keyboard focus stays in the search field, so VoiceOver
+    /// wouldn't notice the change; an announcement reads the newly selected item.
     mutating func moveSelection(by offset: Int, in items: [ClipItem]) {
         let visible = visibleItems(of: items)
         guard !visible.isEmpty else { return }
         let current = visible.firstIndex { $0.id == selectedItem(in: items)?.id } ?? 0
-        selectedID = visible[min(max(current + offset, 0), visible.count - 1)].id
+        let next = min(max(current + offset, 0), visible.count - 1)
+        selectedID = visible[next].id
+        let description = visible[next].accessibilityDescription(shortcutNumber: next < 9 ? next + 1 : nil)
+        AccessibilityNotification.Announcement("\(description), \(next + 1) of \(visible.count)").post()
     }
 
     /// Called each time the popover or panel opens.
@@ -118,7 +123,7 @@ struct HistoryList: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
+            .font(.subheadline.weight(.semibold))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.top, 6)
@@ -161,7 +166,11 @@ struct HistoryList: View {
                 Text("Pin items you use often to keep them at the top.")
             }
         } else {
-            ContentUnavailableView("No \(state.filter.rawValue)", systemImage: "line.3.horizontal.decrease.circle")
+            ContentUnavailableView {
+                Label("No \(state.filter.rawValue)", systemImage: "line.3.horizontal.decrease.circle")
+            } description: {
+                Text("\(state.filter.rawValue) you copy will appear here. Choose All to see everything.")
+            }
         }
     }
 }
@@ -187,6 +196,26 @@ struct HistoryShortcuts: View {
         }
         .opacity(0)
         .allowsHitTesting(false)
+        // Keep these out of the Tab order so keyboard focus never lands on an invisible button.
+        .focusable(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// "History cleared  [Undo Clear]", with ⌘Z. Shown after a delete or clear.
+struct UndoRemovalButton: View {
+    @Environment(HistoryStore.self) private var store
+    let removal: HistoryStore.Removal
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(removal.summary)
+                .foregroundStyle(.secondary)
+            Button(removal.undoTitle) {
+                store.undoRemoval()
+                AccessibilityNotification.Announcement("Restored").post()
+            }
+            .keyboardShortcut("z")
+        }
     }
 }

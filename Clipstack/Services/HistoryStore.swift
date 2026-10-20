@@ -13,10 +13,17 @@ import UniformTypeIdentifiers
 final class HistoryStore {
     /// Newest first. Pinned items are mixed in; views group them.
     private(set) var items: [ClipItem] = []
-    /// Items removed by the last "Clear History", kept so it can be undone.
-    private(set) var clearedItems: [ClipItem]?
+    /// Something people removed that they can still undo.
+    struct Removal {
+        var items: [ClipItem]
+        /// Shown next to the Undo button: "History cleared" or "Item deleted".
+        var summary: String
+        /// "Undo Clear" or "Undo Delete".
+        var undoTitle: String
+    }
 
-    var canUndoClear: Bool { clearedItems != nil }
+    /// The last delete or clear, kept until the next one so it can be undone.
+    private(set) var lastRemoval: Removal?
 
     @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
@@ -79,32 +86,37 @@ final class HistoryStore {
     }
 
     func delete(_ item: ClipItem) {
+        discardRemoval()
         items.removeAll { $0.id == item.id }
-        deleteFiles(for: item)
+        lastRemoval = Removal(items: [item], summary: "Item deleted", undoTitle: "Undo Delete")
         save()
     }
 
     /// Removes every unpinned item. Pinned items stay.
     func clearHistory() {
-        discardClearedItems()
+        discardRemoval()
         let removed = items.filter { !$0.isPinned }
         guard !removed.isEmpty else { return }
         items.removeAll { !$0.isPinned }
-        clearedItems = removed
+        lastRemoval = Removal(items: removed, summary: "History cleared", undoTitle: "Undo Clear")
         save()
     }
 
-    func undoClear() {
-        guard let restored = clearedItems else { return }
-        clearedItems = nil
+    func undoRemoval() {
+        guard let removed = lastRemoval?.items else { return }
+        lastRemoval = nil
+        // Skip anything copied again since, so undo doesn't create duplicates.
+        let present = Set(items.map(\.contentKey))
+        let restored = removed.filter { !present.contains($0.contentKey) }
+        removed.filter { present.contains($0.contentKey) }.forEach(deleteFiles)
         items = (items + restored).sorted { $0.date > $1.date }
         save()
     }
 
-    /// Makes the last clear permanent by deleting its image files.
-    func discardClearedItems() {
-        clearedItems?.forEach(deleteFiles)
-        clearedItems = nil
+    /// Makes the last removal permanent by deleting its files.
+    func discardRemoval() {
+        lastRemoval?.items.forEach(deleteFiles)
+        lastRemoval = nil
     }
 
     /// Removes items outside the current limits and saves.

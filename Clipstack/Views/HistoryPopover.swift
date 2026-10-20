@@ -59,13 +59,8 @@ struct HistoryPopover: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            if store.canUndoClear {
-                Text("History cleared")
-                    .foregroundStyle(.secondary)
-                Button("Undo Clear") {
-                    store.undoClear()
-                }
-                .keyboardShortcut("z")
+            if let removal = store.lastRemoval {
+                UndoRemovalButton(removal: removal)
             } else {
                 Button("Clear History") {
                     store.clearHistory()
@@ -82,10 +77,18 @@ struct HistoryPopover: View {
                 .accessibilityLabel("Return copies the selected item. Command P pins it.")
 
             Menu {
+                Button("About Clipstack") {
+                    close()
+                    NSApp.activate()
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+                Divider()
                 Button("Quick Paste") {
                     close()
                     quickPaste.show()
                 }
+                // Display only: the global shortcut catches the keys first.
+                .keyboardShortcut(quickPaste.shortcut.keyboardShortcut)
                 Button("Settings…", action: showSettings)
                     .keyboardShortcut(",")
                 Divider()
@@ -93,6 +96,8 @@ struct HistoryPopover: View {
                     .keyboardShortcut("q")
             } label: {
                 Image(systemName: "ellipsis.circle")
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
             }
             .menuStyle(.button)
             .buttonStyle(.borderless)
@@ -115,6 +120,7 @@ struct HistoryPopover: View {
             }
                 .opacity(0)
                 .allowsHitTesting(false)
+                .focusable(false)
                 .accessibilityHidden(true)
         }
     }
@@ -135,5 +141,30 @@ struct HistoryPopover: View {
 
     private func close() {
         NSApp.keyWindow?.close()
+    }
+}
+
+extension HotKeyShortcut {
+    /// The same shortcut in SwiftUI terms, for showing it next to a menu item.
+    var keyboardShortcut: KeyboardShortcut? {
+        let named: [String: KeyEquivalent] = [
+            "Space": .space, "↩": .return, "⇥": .tab, "⌫": .delete, "⌦": .deleteForward,
+            "←": .leftArrow, "→": .rightArrow, "↑": .upArrow, "↓": .downArrow,
+            "↖": .home, "↘": .end, "⇞": .pageUp, "⇟": .pageDown,
+        ]
+        let key: KeyEquivalent
+        if let namedKey = named[keyName] {
+            key = namedKey
+        } else if keyName.count == 1, let character = keyName.lowercased().first {
+            key = KeyEquivalent(character)
+        } else {
+            return nil // Function keys have no KeyEquivalent.
+        }
+        var eventModifiers: EventModifiers = []
+        if modifiers.contains(.command) { eventModifiers.insert(.command) }
+        if modifiers.contains(.shift) { eventModifiers.insert(.shift) }
+        if modifiers.contains(.option) { eventModifiers.insert(.option) }
+        if modifiers.contains(.control) { eventModifiers.insert(.control) }
+        return KeyboardShortcut(key, modifiers: eventModifiers)
     }
 }

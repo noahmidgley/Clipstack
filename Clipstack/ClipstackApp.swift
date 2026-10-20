@@ -22,7 +22,7 @@ struct ClipstackApp: App {
         let store = HistoryStore(settings: settings)
         if settings.clearOnLaunch {
             store.clearHistory()
-            store.discardClearedItems()
+            store.discardRemoval()
         }
         let monitor = ClipboardMonitor(store: store, settings: settings)
         monitor.start()

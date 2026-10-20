@@ -33,16 +33,16 @@ struct HistoryRow: View {
                     .lineLimit(2)
                     .truncationMode(.tail)
                 subtitle
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline)
+                    .foregroundStyle(secondaryStyle)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
             if let shortcutNumber {
                 Text("⌘\(shortcutNumber)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(secondaryStyle)
             }
 
             pinButton
@@ -50,6 +50,7 @@ struct HistoryRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .foregroundStyle(isSelected ? Color(nsColor: .alternateSelectedControlTextColor) : .primary)
+        .environment(\.backgroundProminence, isSelected ? .increased : .standard)
         .background {
             if isSelected {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -71,7 +72,7 @@ struct HistoryRow: View {
         }
         // VoiceOver reads the row as one element, with pin and delete as actions.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel(item.accessibilityDescription(now: now, shortcutNumber: shortcutNumber))
         .accessibilityHint(chooseHint)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(.default, onChoose)
@@ -79,42 +80,36 @@ struct HistoryRow: View {
         .accessibilityAction(named: "Delete", onDelete)
     }
 
-    /// Visible while pinned, hovered or selected, so rows stay calm otherwise.
+    /// On the blue selection, grey text drops to about 2.7:1, so selected rows use full white (5.4:1).
+    private var secondaryStyle: AnyShapeStyle {
+        isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary)
+    }
+
+    /// Shown while pinned, hovered or selected, so rows stay calm otherwise. When hidden it isn't
+    /// drawn at all, so keyboard focus can't land on an invisible button.
+    @ViewBuilder
     private var pinButton: some View {
-        Button(action: onTogglePin) {
-            Image(systemName: item.isPinned ? "pin.fill" : "pin")
-                .frame(width: 24, height: 24)
-                .contentShape(.rect)
+        if item.isPinned || isHovering || isSelected {
+            Button(action: onTogglePin) {
+                Image(systemName: item.isPinned ? "pin.fill" : "pin")
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(item.isPinned && !isSelected ? AnyShapeStyle(.tint) : secondaryStyle)
+            .help(item.isPinned ? "Unpin" : "Pin")
+        } else {
+            Color.clear.frame(width: 24, height: 24)
         }
-        .buttonStyle(.borderless)
-        .foregroundStyle(item.isPinned && !isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
-        .opacity(item.isPinned || isHovering || isSelected ? 1 : 0)
-        .help(item.isPinned ? "Unpin" : "Pin")
     }
 
     /// "Safari · 2 min ago", or the device symbol and "Other Device" for Universal Clipboard.
     private var subtitle: Text {
-        let time = Self.timeFormatter.localizedString(for: item.date, relativeTo: now)
+        let time = ClipItem.timeFormatter.localizedString(for: item.date, relativeTo: now)
         guard let source = item.sourceName else { return Text(time) }
         if item.isFromOtherDevice {
             return Text("\(Image(systemName: ClipItem.otherDeviceSymbol)) \(source) · \(time)")
         }
         return Text("\(source) · \(time)")
     }
-
-    private var accessibilityText: String {
-        var parts = [item.kindName, item.kind == .image ? item.text : item.rowText]
-        if let source = item.sourceName { parts.append("from \(source)") }
-        parts.append(Self.timeFormatter.localizedString(for: item.date, relativeTo: now))
-        if item.isPinned { parts.append("Pinned") }
-        if let shortcutNumber { parts.append("Command \(shortcutNumber)") }
-        return parts.joined(separator: ", ")
-    }
-
-    private static let timeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        formatter.dateTimeStyle = .named // "now" rather than "in 0 sec."
-        return formatter
-    }()
 }

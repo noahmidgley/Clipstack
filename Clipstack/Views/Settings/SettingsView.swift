@@ -241,6 +241,8 @@ private struct IgnoredAppRow: View {
         LabeledContent {
             Button(action: onRemove) {
                 Image(systemName: "minus.circle")
+                    .frame(width: 24, height: 24)
+                    .contentShape(.rect)
             }
             .buttonStyle(.borderless)
             .help("Stop ignoring \(app.name)")

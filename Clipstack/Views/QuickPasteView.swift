@@ -38,7 +38,17 @@ struct QuickPasteView: View {
                     Divider()
                     HistoryList(state: $list, chooseTitle: pasteTitle, chooseHint: pasteHint, clickSelects: true) { paste($0) }
                     Divider()
-                    keyboardHints
+                    Group {
+                        if let removal = store.lastRemoval {
+                            UndoRemovalButton(removal: removal)
+                                .font(.callout)
+                                .controlSize(.small)
+                                .padding(.vertical, 6)
+                        } else {
+                            keyboardHints
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .frame(width: 300)
 
