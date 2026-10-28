@@ -1,3 +1,24 @@
-build/
+# macOS
 .DS_Store
+
+# Xcode per-user state (window layout, breakpoints, scheme order)
 xcuserdata/
+*.xcuserstate
+
+# Build output
+build/
+DerivedData/
+*.xcarchive
+*.dSYM
+*.dSYM.zip
+*.ipa
+*.app
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
